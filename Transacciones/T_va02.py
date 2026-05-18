@@ -63,14 +63,18 @@ def _obtener_codigo_puerto_f4(session, campo_path: str, discharge_port: str, ctx
         return None
 
 
-def _buscar_tab(session, nombre: str, ctx: str):
-    """Busca una pestaña por nombre en el TabStrip de cabecera de VA02."""
-    tabstrip = session.findById("/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD")
+TABSTRIP_PATH = "/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD"
+
+
+def _buscar_tab(session, nombre: str, ctx: str) -> str | None:
+    """Busca una pestaña por nombre y retorna su ID (Name) para usar con findById."""
+    tabstrip = session.findById(TABSTRIP_PATH)
     for i in range(tabstrip.Children.Count):
         tab = tabstrip.Children.Item(i)
         if nombre.lower() in str(tab.Text).lower():
-            logger.debug(f"[VA02] Pestaña '{tab.Text}' encontrada en posición {i} (ID={tab.Name}) | {ctx}")
-            return tab
+            tab_id = str(tab.Name)
+            logger.debug(f"[VA02] Pestaña '{tab.Text}' encontrada en posición {i} (ID={tab_id}) | {ctx}")
+            return tab_id
     logger.error(f"[VA02] ✗ Pestaña '{nombre}' no encontrada | {ctx}")
     return None
 
@@ -174,13 +178,12 @@ def ejecutar_VA02(session, fila: dict):
         time.sleep(2)
 
         # Pestaña Interlocutores (busqueda dinamica por nombre)
-        tab_interlocutor = _buscar_tab(session, "Interlocutor", ctx)
-        if tab_interlocutor is None:
+        tab_id = _buscar_tab(session, "Interlocutor", ctx)
+        if tab_id is None:
             return False
-        tab_interlocutor.select()
+        session.findById(f"{TABSTRIP_PATH}/{tab_id}").select()
         time.sleep(2)
-        tab_id = tab_interlocutor.Name
-        logger.info(f"[VA02] Pestaña '{tab_interlocutor.Text}' abierta (ID={tab_id}) | {ctx}")
+        logger.info(f"[VA02] Pestaña Interlocutor abierta (ID={tab_id}) | {ctx}")
 
         # Codigo interlocutor segun OPR LOGIST
         opr_logist = str(fila.get("OPR LOGIST", "")).strip()
@@ -203,13 +206,12 @@ def ejecutar_VA02(session, fila: dict):
                 return False
 
         # Pestaña Datos Exportacion (busqueda dinamica por nombre)
-        tab_exportacion = _buscar_tab(session, "Datos Exportación", ctx)
-        if tab_exportacion is None:
+        tab_exp_id = _buscar_tab(session, "Datos Exportación", ctx)
+        if tab_exp_id is None:
             return False
-        tab_exportacion.select()
+        session.findById(f"{TABSTRIP_PATH}/{tab_exp_id}").select()
         time.sleep(2)
-        tab_exp_id = tab_exportacion.Name
-        logger.info(f"[VA02] Pestaña '{tab_exportacion.Text}' abierta (ID={tab_exp_id}) | {ctx}")
+        logger.info(f"[VA02] Pestaña Datos Exportación abierta (ID={tab_exp_id}) | {ctx}")
 
         # Campos de exportacion
         pais_destino    = str(fila.get("PAIS", "")).strip()
