@@ -1,54 +1,60 @@
 import time
 import sys
 from pathlib import Path
+from loguru import logger
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from helpers.cuadro_maestro import obtener_cod_interlocutor
 
 BASE_PATH    = r"/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD/tabpT\07/ssubSUBSCREEN_BODY:SAPMV45A:4352/subSUBSCREEN_PARTNER_OVERVIEW:SAPLV09C:1000/tblSAPLV09CGV_TC_PARTNER_OVERVIEW/cmbGVS_TC_DATA-REC-PARVW[0,{}]"
 PARTNER_PATH = r"/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD/tabpT\07/ssubSUBSCREEN_BODY:SAPMV45A:4352/subSUBSCREEN_PARTNER_OVERVIEW:SAPLV09C:1000/tblSAPLV09CGV_TC_PARTNER_OVERVIEW/ctxtGVS_TC_DATA-REC-PARTNER[1,{}]"
-TABLA_PATH   = r"/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD/tabpT\07/ssubSUBSCREEN_BODY:SAPMV45A:4352/subSUBSCREEN_PARTNER_OVERVIEW:SAPLV09C:1000/tblSAPLV09CGV_TC_PARTNER_OVERVIEW"
 
 
-def encontrar_primera_fila_vacia(session):
-    fila = 0
+def _contexto(fila: dict) -> str:
+    return (
+        f"Pedido={fila.get('COD PED', '?')} | "
+        f"Cliente={fila.get('CLIENTE', '?')} | "
+        f"BK={fila.get('BUSQUEDA', '?')}"
+    )
+
+
+def encontrar_primera_fila_vacia(session, ctx: str) -> int | None:
+    i = 0
     while True:
         try:
-            texto = session.findById(BASE_PATH.format(fila)).text.strip()
+            texto = session.findById(BASE_PATH.format(i)).text.strip()
             if texto == "":
-                print(f"[VA02] Fila vacia encontrada: {fila}")
-                return fila
-            else:
-                print(f"[VA02] Fila {fila} ocupada con: '{texto}', siguiente...")
-                fila += 1
+                logger.debug(f"[VA02] Fila vacia encontrada en posicion {i} | {ctx}")
+                return i
+            logger.debug(f"[VA02] Fila {i} ocupada con '{texto}' | {ctx}")
+            i += 1
         except Exception as e:
-            print(f"[VA02] Fin de tabla en fila {fila}: {e}")
+            logger.warning(f"[VA02] Fin de tabla en fila {i}: {e} | {ctx}")
             return None
 
 
-def asignar_fila(session, fila, key_opcion, valor_partner):
+def asignar_fila(session, idx_fila: int, key_opcion: str, valor_partner: str, ctx: str) -> bool:
     try:
-        # Combo (select list)
-        session.findById(BASE_PATH.format(fila)).key = key_opcion
-        print(f"[VA02] Fila {fila} -> combo '{key_opcion}' asignado OK")
+        session.findById(BASE_PATH.format(idx_fila)).key = key_opcion
+        logger.debug(f"[VA02] Combo '{key_opcion}' asignado en fila {idx_fila} | {ctx}")
         time.sleep(0.3)
 
-        # Campo de texto partner - misma fila
-        campo = session.findById(PARTNER_PATH.format(fila))
+        campo = session.findById(PARTNER_PATH.format(idx_fila))
         campo.setFocus()
         campo.text = valor_partner
-        # session.findById("wnd[0]").sendVKey(0)
-        print(f"[VA02] Fila {fila} -> partner '{valor_partner}' asignado OK")
-
+        logger.debug(f"[VA02] Partner '{valor_partner}' asignado en fila {idx_fila} | {ctx}")
         return True
     except Exception as e:
-        print(f"[VA02] Error asignando fila {fila}: {e}")
+        logger.error(f"[VA02] ✗ Error asignando fila {idx_fila}: {e} | {ctx}")
         return False
 
 
 def ejecutar_VA02(session, fila: dict):
     cod_ped = str(int(float(fila["COD PED"])))
+    ctx     = _contexto(fila)
+
     try:
-        print(f"[VA02] Navegando a transaccion | Pedido: {cod_ped}")
+        logger.info(f"[VA02] Iniciando | {ctx}")
         session.findById("wnd[0]/tbar[0]/okcd").text = "/nVA02"
         session.findById("wnd[0]").sendVKey(0)
         time.sleep(2)
@@ -60,15 +66,33 @@ def ejecutar_VA02(session, fila: dict):
 
         try:
             ventana = session.findById("/app/con[0]/ses[0]/wnd[1]")
-            print(f"[VA02] Ventana emergente: {ventana.text}")
+            logger.debug(f"[VA02] Ventana emergente detectada: '{ventana.text}' | {ctx}")
             session.findById("/app/con[0]/ses[0]/wnd[1]/tbar[0]/btn[0]").press()
-        except:
-            print("[VA02] Sin ventana emergente, continuando...")
+        except Exception:
+            logger.debug(f"[VA02] Sin ventana emergente | {ctx}")
         time.sleep(1)
 
         valorneto = session.findById("/app/con[0]/ses[0]/wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4021/txtVBAK-NETWR").text
         moneda    = session.findById("/app/con[0]/ses[0]/wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4021/ctxtVBAK-WAERK").text
-        print(f"[VA02] Valor neto: {valorneto} | Moneda: {moneda}")
+        logger.info(f"[VA02] Valor neto={valorneto} | Moneda={moneda} | {ctx}")
+
+        # Validacion monto vs Excel
+        monto_excel = fila.get("Monto total CFR")
+        if monto_excel is not None and str(valorneto).strip():
+            try:
+                sap_float   = float(str(valorneto).replace(",", "").strip())
+                excel_float = float(monto_excel)
+                if sap_float == excel_float:
+                    logger.success(f"[VA02] ✓ Monto coincide: SAP={sap_float} | Excel={excel_float} | {ctx}")
+                else:
+                    diferencia = sap_float - excel_float
+                    logger.warning(
+                        f"[VA02] ⚠ DIFERENCIA EN MONTO — "
+                        f"SAP={sap_float} | Excel={excel_float} | "
+                        f"Diferencia={diferencia:+.2f} | {ctx}"
+                    )
+            except Exception:
+                logger.warning(f"[VA02] No se pudo comparar monto | {ctx}")
 
         session.findById("/app/con[0]/ses[0]/wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4021/btnBT_HEAD").press()
         time.sleep(2)
@@ -76,20 +100,25 @@ def ejecutar_VA02(session, fila: dict):
         time.sleep(2)
 
         opr_logist = str(fila.get("OPR LOGIST", "")).strip()
-        cod_interlocutor = obtener_cod_interlocutor(opr_logist)
-        print(f"[VA02] Operador logístico: {opr_logist} → COD interlocutor: {cod_interlocutor}")
-
-        fila_sap = encontrar_primera_fila_vacia(session)
-        if fila_sap is None:
-            print("[VA02] No hay filas disponibles")
+        try:
+            cod_interlocutor = obtener_cod_interlocutor(opr_logist)
+            logger.info(f"[VA02] OPR LOGIST={opr_logist} → COD interlocutor={cod_interlocutor} | {ctx}")
+        except ValueError as e:
+            logger.error(f"[VA02] ✗ {e} | {ctx}")
             return False
 
-        ok = asignar_fila(session, fila_sap, "ZO", cod_interlocutor)
+        fila_sap = encontrar_primera_fila_vacia(session, ctx)
+        if fila_sap is None:
+            logger.error(f"[VA02] ✗ No hay filas disponibles en tabla de partners | {ctx}")
+            return False
+
+        ok = asignar_fila(session, fila_sap, "ZO", cod_interlocutor, ctx)
         if not ok:
             return False
 
+        logger.success(f"[VA02] Completado OK | {ctx}")
         return {"Monto total CFR": valorneto}
 
     except Exception as e:
-        print(f"[VA02] Error: {e}")
+        logger.error(f"[VA02] ✗ Excepción inesperada: {e} | {ctx}")
         return False
