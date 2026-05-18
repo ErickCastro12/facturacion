@@ -6,7 +6,7 @@ from loguru import logger
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from helpers.cuadro_maestro import obtener_cod_interlocutor
-from helpers.codigos_sap    import obtener_puerto_embarque, normalizar_pais
+from helpers.codigos_sap    import obtener_puerto_embarque, normalizar_pais, obtener_puerto_destino
 
 BASE_PATH_TPL    = "/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD/{tab}/ssubSUBSCREEN_BODY:SAPMV45A:4352/subSUBSCREEN_PARTNER_OVERVIEW:SAPLV09C:1000/tblSAPLV09CGV_TC_PARTNER_OVERVIEW/cmbGVS_TC_DATA-REC-PARVW[0,{fila}]"
 PARTNER_PATH_TPL = "/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD/{tab}/ssubSUBSCREEN_BODY:SAPMV45A:4352/subSUBSCREEN_PARTNER_OVERVIEW:SAPLV09C:1000/tblSAPLV09CGV_TC_PARTNER_OVERVIEW/ctxtGVS_TC_DATA-REC-PARTNER[1,{fila}]"
@@ -299,15 +299,22 @@ def ejecutar_VA02(session, fila: dict):
         time.sleep(1)
         logger.info(f"[VA02] SKTO={codigo_pais} | {ctx}")
 
-        # ZZ_PUEDES — puerto de descarga, leido dinamicamente via F4
+        # ZZ_PUEDES — puerto de descarga
+        # Prioridad: mapa estático (codigos_sap.py) → F4 dinámico como fallback
         _limpiar(f"{sub}/ctxtVBAK-ZZ_PUEDES")
-        cod_puerto_destino = _obtener_codigo_puerto_f4(
-            session, f"{sub}/ctxtVBAK-ZZ_PUEDES", discharge_port, ctx, pais=codigo_pais
-        )
-        if cod_puerto_destino is None:
-            logger.error(f"[VA02] ✗ No se pudo obtener código para DISCHARGE PORT='{discharge_port}' | {ctx}")
-            return False
-        logger.info(f"[VA02] ZZ_PUEDES={cod_puerto_destino} (DISCHARGE PORT={discharge_port}) | {ctx}")
+        try:
+            cod_puerto_destino = obtener_puerto_destino(codigo_pais, discharge_port)
+            session.findById(f"{sub}/ctxtVBAK-ZZ_PUEDES").text = cod_puerto_destino
+            logger.info(f"[VA02] ZZ_PUEDES={cod_puerto_destino} (mapa estático | DISCHARGE PORT={discharge_port}) | {ctx}")
+        except ValueError:
+            logger.debug(f"[VA02] '{discharge_port}' no en mapa estático para '{codigo_pais}', usando F4 | {ctx}")
+            cod_puerto_destino = _obtener_codigo_puerto_f4(
+                session, f"{sub}/ctxtVBAK-ZZ_PUEDES", discharge_port, ctx, pais=codigo_pais
+            )
+            if cod_puerto_destino is None:
+                logger.error(f"[VA02] ✗ No se pudo obtener código para DISCHARGE PORT='{discharge_port}' | {ctx}")
+                return False
+            logger.info(f"[VA02] ZZ_PUEDES={cod_puerto_destino} (F4 dinámico | DISCHARGE PORT={discharge_port}) | {ctx}")
 
         # ZZ_PUEEMB — puerto de embarque, match por LOADING PORT
         try:
