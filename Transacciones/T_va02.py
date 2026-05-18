@@ -55,19 +55,28 @@ def _obtener_codigo_puerto_f4(session, campo_path: str, discharge_port: str, ctx
             except Exception:
                 logger.debug(f"[VA02] No se pudo leer label de país del popup F4 | {ctx}")
 
-        busqueda = discharge_port.strip().upper()
-        row      = 0
+        busqueda          = discharge_port.strip().upper()
+        filas_leidas      = 0
+        fallos_consec     = 0
+        MAX_FALLOS        = 5   # filas vacías/header consecutivas antes de cortar
+        MAX_FILAS         = 300
 
-        while True:
+        for row in range(MAX_FILAS):
             try:
                 cod_path = f"{_F4_BASE}/4[0,{row}]/lbl[1,{row}]"
-                den_path = f"{_F4_BASE}/4[0,{row}]/lbl[2,{row}]"
+                codigo   = str(session.findById(cod_path).text).strip()
 
-                codigo = str(session.findById(cod_path).text).strip()
                 if not codigo:
-                    break
+                    fallos_consec += 1
+                    if fallos_consec >= MAX_FALLOS:
+                        break
+                    continue
+
+                fallos_consec = 0
+                filas_leidas += 1
 
                 try:
+                    den_path     = f"{_F4_BASE}/4[0,{row}]/lbl[2,{row}]"
                     denominacion = str(session.findById(den_path).text).strip().upper()
                 except Exception:
                     denominacion = ""
@@ -83,12 +92,12 @@ def _obtener_codigo_puerto_f4(session, campo_path: str, discharge_port: str, ctx
                     time.sleep(1)
                     return codigo
 
-                row += 1
-
             except Exception:
-                break
+                fallos_consec += 1
+                if fallos_consec >= MAX_FALLOS:
+                    break
 
-        logger.error(f"[VA02] ✗ '{discharge_port}' no encontrado en F4 ({row} filas leídas) | {ctx}")
+        logger.error(f"[VA02] ✗ '{discharge_port}' no encontrado en F4 ({filas_leidas} filas leídas) | {ctx}")
         session.findById("wnd[1]").sendVKey(12)
         time.sleep(1)
         return None
