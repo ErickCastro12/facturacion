@@ -469,6 +469,25 @@ def ejecutar_VA02(session, fila: dict):
         session.findById("wnd[0]").sendVKey(0)
         time.sleep(1)
 
+        # Guardar
+        session.findById("wnd[0]/tbar[0]/btn[11]").press()
+        time.sleep(2)
+
+        msg_sap = session.findById("wnd[0]/sbar/pane[0]").text.strip()
+        logger.info(f"[VA02] Barra SAP tras guardar: '{msg_sap}' | {ctx}")
+
+        msg_lower = msg_sap.lower()
+        if "no hubo modificaciones" in msg_lower or "no se han efectuado" in msg_lower:
+            logger.info(f"[VA02] Sin cambios que guardar (pedido ya estaba actualizado) | {ctx}")
+        elif "grabado" in msg_lower or "guardado" in msg_lower or "actualizado" in msg_lower or cod_ped in msg_sap:
+            logger.success(f"[VA02] ✓ Pedido guardado correctamente | {ctx}")
+        else:
+            logger.warning(f"[VA02] ⚠ Mensaje SAP inesperado al guardar: '{msg_sap}' | {ctx}")
+
+        # Regresar al menú principal
+        session.findById("wnd[0]/tbar[0]/btn[3]").press()
+        time.sleep(1)
+
         logger.success(f"[VA02] Completado OK | {ctx}")
         return {"Monto total CFR": valorneto}
 
