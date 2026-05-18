@@ -75,15 +75,21 @@ def _obtener_codigo_puerto_f4(session, campo_path: str, discharge_port: str, ctx
                 fallos_consec = 0
                 filas_leidas += 1
 
-                try:
-                    den_path     = f"{_F4_BASE}/4[0,{row}]/lbl[2,{row}]"
-                    denominacion = str(session.findById(den_path).text).strip().upper()
-                except Exception:
-                    denominacion = ""
+                # Buscar denominación en columnas 2..6 — loguear todas para identificar la correcta
+                denominacion = ""
+                for col in range(2, 7):
+                    try:
+                        val = str(session.findById(f"{_F4_BASE}/4[0,{row}]/lbl[{col},{row}]").text).strip()
+                        if val:
+                            logger.debug(f"[VA02] F4 fila {row} lbl[{col},{row}]='{val}' | {ctx}")
+                            if not denominacion:
+                                denominacion = val.upper()
+                    except Exception:
+                        pass
 
                 logger.debug(f"[VA02] F4 fila {row}: codigo='{codigo}' denominacion='{denominacion}' | {ctx}")
 
-                if busqueda in denominacion or denominacion in busqueda:
+                if denominacion and (busqueda in denominacion or denominacion in busqueda):
                     logger.info(f"[VA02] Puerto encontrado: '{denominacion}' → {codigo} | {ctx}")
                     session.findById(cod_path).setFocus()
                     session.findById(cod_path).click()
