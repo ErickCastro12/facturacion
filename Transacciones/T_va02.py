@@ -67,12 +67,12 @@ TABSTRIP_PATH = "/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD"
 
 
 def _buscar_tab(session, nombre: str, ctx: str) -> str | None:
-    """Busca una pestaña por nombre y retorna su ID (Name) para usar con findById."""
+    """Busca una pestaña por nombre y retorna su ID completo (tabpXXX) para usar con findById."""
     tabstrip = session.findById(TABSTRIP_PATH)
     for i in range(tabstrip.Children.Count):
         tab = tabstrip.Children.Item(i)
         if nombre.lower() in str(tab.Text).lower():
-            tab_id = str(tab.Name)
+            tab_id = f"tabp{tab.Name}"   # tab.Name = "T\07" → necesitamos "tabpT\07"
             logger.debug(f"[VA02] Pestaña '{tab.Text}' encontrada en posición {i} (ID={tab_id}) | {ctx}")
             return tab_id
     logger.error(f"[VA02] ✗ Pestaña '{nombre}' no encontrada | {ctx}")
