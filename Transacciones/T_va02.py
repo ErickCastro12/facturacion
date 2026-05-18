@@ -6,140 +6,10 @@ from loguru import logger
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from helpers.cuadro_maestro import obtener_cod_interlocutor
-from helpers.codigos_sap    import obtener_puerto_embarque
+from helpers.codigos_sap    import obtener_puerto_embarque, normalizar_pais
 
 BASE_PATH_TPL    = "/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD/{tab}/ssubSUBSCREEN_BODY:SAPMV45A:4352/subSUBSCREEN_PARTNER_OVERVIEW:SAPLV09C:1000/tblSAPLV09CGV_TC_PARTNER_OVERVIEW/cmbGVS_TC_DATA-REC-PARVW[0,{fila}]"
 PARTNER_PATH_TPL = "/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD/{tab}/ssubSUBSCREEN_BODY:SAPMV45A:4352/subSUBSCREEN_PARTNER_OVERVIEW:SAPLV09C:1000/tblSAPLV09CGV_TC_PARTNER_OVERVIEW/ctxtGVS_TC_DATA-REC-PARTNER[1,{fila}]"
-
-# Nombres del Excel → código ISO SAP de 2 letras
-# Cubre: alpha-3, nombres en español, nombres en inglés y alias comunes
-_MAPA_PAIS = {
-    # ── ISO alpha-3 ────────────────────────────────────────────────────────
-    "USA": "US", "PER": "PE", "COL": "CO", "CHL": "CL", "ECU": "EC",
-    "MEX": "MX", "CAN": "CA", "BRA": "BR", "ESP": "ES", "CHN": "CN",
-    "JPN": "JP", "DEU": "DE", "NLD": "NL", "GBR": "GB", "FRA": "FR",
-    "ITA": "IT", "AUS": "AU", "NZL": "NZ", "ARG": "AR", "BOL": "BO",
-    "PRY": "PY", "URY": "UY", "VEN": "VE", "PAN": "PA", "CRI": "CR",
-    "GTM": "GT", "HND": "HN", "SLV": "SV", "NIC": "NI", "DOM": "DO",
-    "CUB": "CU", "BEL": "BE", "CHE": "CH", "AUT": "AT", "PRT": "PT",
-    "SWE": "SE", "NOR": "NO", "DNK": "DK", "FIN": "FI", "GRC": "GR",
-    "TUR": "TR", "RUS": "RU", "IND": "IN", "KOR": "KR", "THA": "TH",
-    "VNM": "VN", "IDN": "ID", "MYS": "MY", "PHL": "PH", "SGP": "SG",
-    "ZAF": "ZA", "NGA": "NG", "EGY": "EG", "MAR": "MA", "KEN": "KE",
-    "ISR": "IL", "SAU": "SA", "ARE": "AE", "QAT": "QA", "KWT": "KW",
-    "HKG": "HK", "TWN": "TW", "CZE": "CZ", "POL": "PL", "HUN": "HU",
-    "ROU": "RO", "HRV": "HR", "SVK": "SK", "SVN": "SI", "BGR": "BG",
-    # ── Nombres en español ────────────────────────────────────────────────
-    "PERU": "PE", "PERÚ": "PE",
-    "ESTADOS UNIDOS": "US", "EE.UU.": "US",
-    "MEXICO": "MX", "MÉXICO": "MX",
-    "BRASIL": "BR",
-    "ALEMANIA": "DE",
-    "ESPAÑA": "ES",
-    "JAPÓN": "JP", "JAPON": "JP",
-    "PAISES BAJOS": "NL", "PAÍSES BAJOS": "NL", "HOLANDA": "NL",
-    "REINO UNIDO": "GB",
-    "FRANCIA": "FR",
-    "ITALIA": "IT",
-    "CANADA": "CA", "CANADÁ": "CA",
-    "NUEVA ZELANDA": "NZ",
-    "ARGENTINA": "AR",
-    "COLOMBIA": "CO",
-    "CHILE": "CL",
-    "ECUADOR": "EC",
-    "BOLIVIA": "BO",
-    "PARAGUAY": "PY",
-    "URUGUAY": "UY",
-    "VENEZUELA": "VE",
-    "PANAMA": "PA", "PANAMÁ": "PA",
-    "COSTA RICA": "CR",
-    "GUATEMALA": "GT",
-    "HONDURAS": "HN",
-    "EL SALVADOR": "SV",
-    "NICARAGUA": "NI",
-    "REPUBLICA DOMINICANA": "DO", "REPÚBLICA DOMINICANA": "DO",
-    "CUBA": "CU",
-    "BELGICA": "BE", "BÉLGICA": "BE",
-    "SUIZA": "CH",
-    "AUSTRIA": "AT",
-    "PORTUGAL": "PT",
-    "SUECIA": "SE",
-    "NORUEGA": "NO",
-    "DINAMARCA": "DK",
-    "FINLANDIA": "FI",
-    "GRECIA": "GR",
-    "TURQUIA": "TR", "TURQUÍA": "TR",
-    "RUSIA": "RU",
-    "INDIA": "IN",
-    "COREA DEL SUR": "KR",
-    "TAILANDIA": "TH",
-    "VIETNAM": "VN",
-    "INDONESIA": "ID",
-    "MALASIA": "MY",
-    "FILIPINAS": "PH",
-    "SINGAPUR": "SG",
-    "SUDAFRICA": "ZA", "SUDÁFRICA": "ZA",
-    "MARRUECOS": "MA",
-    "ISRAEL": "IL",
-    "ARABIA SAUDI": "SA", "ARABIA SAUDÍ": "SA",
-    "EMIRATOS": "AE", "EMIRATOS ARABES UNIDOS": "AE",
-    "QATAR": "QA",
-    "KUWAIT": "KW",
-    "HONG KONG": "HK",
-    "TAIWAN": "TW",
-    "REPUBLICA CHECA": "CZ", "REPÚBLICA CHECA": "CZ",
-    "POLONIA": "PL",
-    "HUNGRIA": "HU", "HUNGRÍA": "HU",
-    "RUMANIA": "RO", "RUMANÍA": "RO",
-    "CROACIA": "HR",
-    "ESLOVAQUIA": "SK",
-    "ESLOVENIA": "SI",
-    "BULGARIA": "BG",
-    # ── Nombres en inglés ─────────────────────────────────────────────────
-    "UNITED STATES": "US", "UNITED STATES OF AMERICA": "US",
-    "BRAZIL": "BR",
-    "GERMANY": "DE",
-    "SPAIN": "ES",
-    "JAPAN": "JP",
-    "NETHERLANDS": "NL",
-    "UK": "GB", "UNITED KINGDOM": "GB",
-    "FRANCE": "FR",
-    "ITALY": "IT",
-    "AUSTRALIA": "AU",
-    "NEW ZEALAND": "NZ",
-    "BELGIUM": "BE",
-    "SWITZERLAND": "CH",
-    "SWEDEN": "SE",
-    "NORWAY": "NO",
-    "DENMARK": "DK",
-    "FINLAND": "FI",
-    "GREECE": "GR",
-    "TURKEY": "TR",
-    "RUSSIA": "RU",
-    "SOUTH KOREA": "KR",
-    "THAILAND": "TH",
-    "MALAYSIA": "MY",
-    "PHILIPPINES": "PH",
-    "SINGAPORE": "SG",
-    "SOUTH AFRICA": "ZA",
-    "MOROCCO": "MA",
-    "SAUDI ARABIA": "SA",
-    "UAE": "AE",
-    "CHINA": "CN",
-    "POLAND": "PL",
-    "ROMANIA": "RO",
-    "CROATIA": "HR",
-    "CZECH REPUBLIC": "CZ",
-    # ── Alias adicionales detectados en el Cuadro Maestro ─────────────────
-    "CHIPRE": "CY", "CYPRUS": "CY",
-    "EAU": "AE",                        # Emiratos Arabes Unidos (abrev. francesa)
-    "EMIRATOS ARABES UNIDOS": "AE",
-    "EGIPTO": "EG", "EGYPT": "EG",
-    "IRAQ": "IQ", "IRAK": "IQ",
-    "LIBANO": "LB", "LÍBANO": "LB", "LEBANON": "LB",
-    "SINGAPOUR": "SG",                  # grafía francesa usada en el Excel
-    "ESPANA": "ES",                     # alias sin ñ por encoding
-}
 
 
 def _contexto(fila: dict) -> str:
@@ -150,37 +20,76 @@ def _contexto(fila: dict) -> str:
     )
 
 
-def _obtener_codigo_puerto_f4(session, campo_path: str, discharge_port: str, ctx: str) -> str | None:
+# Base del contenedor de lista en el popup F4 de puertos (GuiSimpleContainer confirmado)
+_F4_BASE = "wnd[1]/usr/sub/1[0,0]/sub/1/3[0,1]/sub/1/3"
+
+
+_F4_PAIS_LBL = "wnd[1]/usr/sub/1[0,0]/sub/1/2[0,0]/lbl[15,0]"  # label que muestra el país filtrado
+
+
+def _obtener_codigo_puerto_f4(session, campo_path: str, discharge_port: str, ctx: str, pais: str = "") -> str | None:
     """
-    Abre el F4 del campo ZZ_PUEDES, lee la grilla de puertos filtrada
-    por el país ya ingresado en SKTO, y retorna el código que coincide
-    con el DISCHARGE PORT del Excel.
+    Abre el F4 del campo ZZ_PUEDES, valida que el popup filtre por el país
+    esperado, y retorna el código que coincide con DISCHARGE PORT.
     """
     try:
         session.findById(campo_path).setFocus()
         session.findById("wnd[0]").sendVKey(4)  # F4
         time.sleep(2)
 
-        # Leer grilla del popup
-        grilla = session.findById("wnd[1]/usr/cntlALV_CONTAINER/shellcont/shell")
-        total  = grilla.rowCount
-        logger.debug(f"[VA02] F4 puertos: {total} registros encontrados | {ctx}")
+        try:
+            popup = session.findById("wnd[1]")
+            logger.debug(f"[VA02] F4 popup abierto: '{popup.text}' | {ctx}")
+        except Exception:
+            logger.error(f"[VA02] ✗ F4 no abrió popup | {ctx}")
+            return None
+
+        # Validar que el popup filtra por el país correcto
+        if pais:
+            try:
+                pais_popup = str(session.findById(_F4_PAIS_LBL).text).strip().upper()
+                if pais_popup == pais.upper():
+                    logger.debug(f"[VA02] F4 filtrado por país '{pais_popup}' ✓ | {ctx}")
+                else:
+                    logger.warning(f"[VA02] ⚠ F4 muestra país '{pais_popup}' pero se esperaba '{pais}' | {ctx}")
+            except Exception:
+                logger.debug(f"[VA02] No se pudo leer label de país del popup F4 | {ctx}")
 
         busqueda = discharge_port.strip().upper()
+        row      = 0
 
-        for i in range(total):
-            denominacion = str(grilla.getCellValue(i, "BEZTL")).strip().upper()
-            codigo       = str(grilla.getCellValue(i, "PTOAD")).strip()
-            if busqueda in denominacion or denominacion in busqueda:
-                logger.info(f"[VA02] Puerto encontrado: '{denominacion}' → {codigo} | {ctx}")
-                # Seleccionar fila y cerrar popup
-                grilla.selectedRows = str(i)
-                session.findById("wnd[1]").sendVKey(2)  # Enter para confirmar
-                time.sleep(1)
-                return codigo
+        while True:
+            try:
+                cod_path = f"{_F4_BASE}/4[0,{row}]/lbl[1,{row}]"
+                den_path = f"{_F4_BASE}/4[0,{row}]/lbl[2,{row}]"
 
-        logger.error(f"[VA02] ✗ '{discharge_port}' no encontrado en la grilla F4 | {ctx}")
-        session.findById("wnd[1]").sendVKey(12)  # F12 para cerrar sin seleccionar
+                codigo = str(session.findById(cod_path).text).strip()
+                if not codigo:
+                    break
+
+                try:
+                    denominacion = str(session.findById(den_path).text).strip().upper()
+                except Exception:
+                    denominacion = ""
+
+                logger.debug(f"[VA02] F4 fila {row}: codigo='{codigo}' denominacion='{denominacion}' | {ctx}")
+
+                if busqueda in denominacion or denominacion in busqueda:
+                    logger.info(f"[VA02] Puerto encontrado: '{denominacion}' → {codigo} | {ctx}")
+                    session.findById(cod_path).setFocus()
+                    session.findById(cod_path).click()
+                    time.sleep(0.5)
+                    session.findById("wnd[1]").sendVKey(2)  # Enter para confirmar
+                    time.sleep(1)
+                    return codigo
+
+                row += 1
+
+            except Exception:
+                break
+
+        logger.error(f"[VA02] ✗ '{discharge_port}' no encontrado en F4 ({row} filas leídas) | {ctx}")
+        session.findById("wnd[1]").sendVKey(12)
         time.sleep(1)
         return None
 
@@ -362,15 +271,13 @@ def ejecutar_VA02(session, fila: dict):
         logger.debug(f"[VA02] SKFROM=PE (origen fijo Perú) | {ctx}")
 
         # SKTO — país de destino desde columna PAIS, normalizado a código ISO 2 letras
-        pais_upper  = pais_destino.upper()
-        if len(pais_upper) == 2:
-            codigo_pais = pais_upper  # ya es código ISO
-        else:
-            codigo_pais = _MAPA_PAIS.get(pais_upper)
-            if codigo_pais is None:
-                logger.error(f"[VA02] ✗ País '{pais_destino}' no encontrado en _MAPA_PAIS — agregar al diccionario | {ctx}")
-                return False
-            logger.debug(f"[VA02] PAIS '{pais_destino}' normalizado → '{codigo_pais}' | {ctx}")
+        try:
+            codigo_pais = normalizar_pais(pais_destino)
+            if codigo_pais != pais_destino.strip().upper():
+                logger.debug(f"[VA02] PAIS '{pais_destino}' normalizado → '{codigo_pais}' | {ctx}")
+        except ValueError as e:
+            logger.error(f"[VA02] ✗ {e} | {ctx}")
+            return False
         _limpiar(f"{sub}/ctxtVBAK-SKTO")
         session.findById(f"{sub}/ctxtVBAK-SKTO").text = codigo_pais
         session.findById("wnd[0]").sendVKey(0)
@@ -380,7 +287,7 @@ def ejecutar_VA02(session, fila: dict):
         # ZZ_PUEDES — puerto de descarga, leido dinamicamente via F4
         _limpiar(f"{sub}/ctxtVBAK-ZZ_PUEDES")
         cod_puerto_destino = _obtener_codigo_puerto_f4(
-            session, f"{sub}/ctxtVBAK-ZZ_PUEDES", discharge_port, ctx
+            session, f"{sub}/ctxtVBAK-ZZ_PUEDES", discharge_port, ctx, pais=codigo_pais
         )
         if cod_puerto_destino is None:
             logger.error(f"[VA02] ✗ No se pudo obtener código para DISCHARGE PORT='{discharge_port}' | {ctx}")

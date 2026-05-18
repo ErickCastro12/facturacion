@@ -176,3 +176,155 @@ def obtener_puerto_embarque(puerto: str) -> str:
             f"Puertos disponibles: {list(PUERTOS_EMBARQUE.keys())}"
         )
     return codigo
+
+
+# ---------------------------------------------------------------------------
+# MAPA DE PAÍSES — nombre/alpha-3 del Excel → código ISO alpha-2 para SAP
+# Cubre los países detectados en el Cuadro Maestro + aliases comunes
+# ---------------------------------------------------------------------------
+MAPA_PAIS: dict[str, str] = {
+    # ── ISO alpha-3 ────────────────────────────────────────────────────────
+    "USA": "US", "PER": "PE", "COL": "CO", "CHL": "CL", "ECU": "EC",
+    "MEX": "MX", "CAN": "CA", "BRA": "BR", "ESP": "ES", "CHN": "CN",
+    "JPN": "JP", "DEU": "DE", "NLD": "NL", "GBR": "GB", "FRA": "FR",
+    "ITA": "IT", "AUS": "AU", "NZL": "NZ", "ARG": "AR", "BOL": "BO",
+    "PRY": "PY", "URY": "UY", "VEN": "VE", "PAN": "PA", "CRI": "CR",
+    "GTM": "GT", "HND": "HN", "SLV": "SV", "NIC": "NI", "DOM": "DO",
+    "CUB": "CU", "BEL": "BE", "CHE": "CH", "AUT": "AT", "PRT": "PT",
+    "SWE": "SE", "NOR": "NO", "DNK": "DK", "FIN": "FI", "GRC": "GR",
+    "TUR": "TR", "RUS": "RU", "IND": "IN", "KOR": "KR", "THA": "TH",
+    "VNM": "VN", "IDN": "ID", "MYS": "MY", "PHL": "PH", "SGP": "SG",
+    "ZAF": "ZA", "NGA": "NG", "EGY": "EG", "MAR": "MA", "KEN": "KE",
+    "ISR": "IL", "SAU": "SA", "ARE": "AE", "QAT": "QA", "KWT": "KW",
+    "HKG": "HK", "TWN": "TW", "CZE": "CZ", "POL": "PL", "HUN": "HU",
+    "ROU": "RO", "HRV": "HR", "SVK": "SK", "SVN": "SI", "BGR": "BG",
+    "CYP": "CY", "IRQ": "IQ", "LBN": "LB",
+    # ── Nombres en español ────────────────────────────────────────────────
+    "PERU": "PE", "PERÚ": "PE",
+    "ESTADOS UNIDOS": "US", "EE.UU.": "US",
+    "MEXICO": "MX", "MÉXICO": "MX",
+    "BRASIL": "BR",
+    "ALEMANIA": "DE",
+    "ESPAÑA": "ES", "ESPANA": "ES",
+    "JAPÓN": "JP", "JAPON": "JP",
+    "PAISES BAJOS": "NL", "PAÍSES BAJOS": "NL", "HOLANDA": "NL",
+    "REINO UNIDO": "GB",
+    "FRANCIA": "FR",
+    "ITALIA": "IT",
+    "CANADA": "CA", "CANADÁ": "CA",
+    "NUEVA ZELANDA": "NZ",
+    "ARGENTINA": "AR",
+    "COLOMBIA": "CO",
+    "CHILE": "CL",
+    "ECUADOR": "EC",
+    "BOLIVIA": "BO",
+    "PARAGUAY": "PY",
+    "URUGUAY": "UY",
+    "VENEZUELA": "VE",
+    "PANAMA": "PA", "PANAMÁ": "PA",
+    "COSTA RICA": "CR",
+    "GUATEMALA": "GT",
+    "HONDURAS": "HN",
+    "EL SALVADOR": "SV",
+    "NICARAGUA": "NI",
+    "REPUBLICA DOMINICANA": "DO", "REPÚBLICA DOMINICANA": "DO",
+    "CUBA": "CU",
+    "BELGICA": "BE", "BÉLGICA": "BE",
+    "SUIZA": "CH",
+    "AUSTRIA": "AT",
+    "PORTUGAL": "PT",
+    "SUECIA": "SE",
+    "NORUEGA": "NO",
+    "DINAMARCA": "DK",
+    "FINLANDIA": "FI",
+    "GRECIA": "GR",
+    "TURQUIA": "TR", "TURQUÍA": "TR",
+    "RUSIA": "RU",
+    "INDIA": "IN",
+    "COREA DEL SUR": "KR",
+    "TAILANDIA": "TH",
+    "VIETNAM": "VN",
+    "INDONESIA": "ID",
+    "MALASIA": "MY",
+    "FILIPINAS": "PH",
+    "SINGAPUR": "SG",
+    "SUDAFRICA": "ZA", "SUDÁFRICA": "ZA",
+    "MARRUECOS": "MA",
+    "ISRAEL": "IL",
+    "ARABIA SAUDI": "SA", "ARABIA SAUDÍ": "SA",
+    "EMIRATOS": "AE", "EMIRATOS ARABES UNIDOS": "AE", "EAU": "AE",
+    "QATAR": "QA",
+    "KUWAIT": "KW",
+    "HONG KONG": "HK",
+    "TAIWAN": "TW",
+    "REPUBLICA CHECA": "CZ", "REPÚBLICA CHECA": "CZ",
+    "POLONIA": "PL",
+    "HUNGRIA": "HU", "HUNGRÍA": "HU",
+    "RUMANIA": "RO", "RUMANÍA": "RO",
+    "CROACIA": "HR",
+    "ESLOVAQUIA": "SK",
+    "ESLOVENIA": "SI",
+    "BULGARIA": "BG",
+    "CHIPRE": "CY", "CYPRUS": "CY",
+    "EGIPTO": "EG",
+    "IRAQ": "IQ", "IRAK": "IQ",
+    "LIBANO": "LB", "LÍBANO": "LB",
+    "SINGAPOUR": "SG",
+    # ── Nombres en inglés ─────────────────────────────────────────────────
+    "UNITED STATES": "US", "UNITED STATES OF AMERICA": "US",
+    "BRAZIL": "BR",
+    "GERMANY": "DE",
+    "SPAIN": "ES",
+    "JAPAN": "JP",
+    "NETHERLANDS": "NL",
+    "UK": "GB", "UNITED KINGDOM": "GB",
+    "FRANCE": "FR",
+    "ITALY": "IT",
+    "AUSTRALIA": "AU",
+    "NEW ZEALAND": "NZ",
+    "BELGIUM": "BE",
+    "SWITZERLAND": "CH",
+    "SWEDEN": "SE",
+    "NORWAY": "NO",
+    "DENMARK": "DK",
+    "FINLAND": "FI",
+    "GREECE": "GR",
+    "TURKEY": "TR",
+    "RUSSIA": "RU",
+    "SOUTH KOREA": "KR",
+    "THAILAND": "TH",
+    "MALAYSIA": "MY",
+    "PHILIPPINES": "PH",
+    "SINGAPORE": "SG",
+    "SOUTH AFRICA": "ZA",
+    "MOROCCO": "MA",
+    "SAUDI ARABIA": "SA",
+    "UAE": "AE",
+    "CHINA": "CN",
+    "POLAND": "PL",
+    "ROMANIA": "RO",
+    "CROATIA": "HR",
+    "CZECH REPUBLIC": "CZ",
+    "EGYPT": "EG",
+    "IRAQ": "IQ",
+    "LEBANON": "LB",
+    "CYPRUS": "CY",
+}
+
+
+def normalizar_pais(valor: str) -> str:
+    """
+    Convierte el valor de la columna PAIS del Excel al código ISO alpha-2 que
+    espera SAP. Si ya es de 2 letras lo devuelve tal cual. Lanza ValueError
+    si no se puede resolver.
+    """
+    v = valor.strip().upper()
+    if len(v) == 2:
+        return v
+    codigo = MAPA_PAIS.get(v)
+    if codigo is None:
+        raise ValueError(
+            f"País '{valor}' no encontrado en MAPA_PAIS (codigos_sap.py). "
+            "Agregar la entrada correspondiente."
+        )
+    return codigo
