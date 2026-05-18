@@ -1,8 +1,9 @@
 import time
 
-def ejecutar_ZSD007(session):
+def ejecutar_ZSD007(session, fila: dict):
+    cod_ped = str(int(float(fila["COD PED"])))
     try:
-        print("[ZSD007] Navegando a transaccion...")
+        print(f"[ZSD007] Navegando a transaccion | Pedido: {cod_ped}")
         session.findById("wnd[0]/tbar[0]/okcd").text = "/nZSD007"
         session.findById("wnd[0]").sendVKey(0)
         time.sleep(2)
@@ -10,22 +11,22 @@ def ejecutar_ZSD007(session):
         session.findById("wnd[0]/usr/txt%_P_VSTEL_%_APP_%-TEXT")
         print("[ZSD007] Transaccion abierta correctamente")
 
-        session.findById("/app/con[0]/ses[0]/wnd[0]/usr/ctxtP_SONUM").text =  "20039216"       
-        time.sleep(2)  
+        session.findById("/app/con[0]/ses[0]/wnd[0]/usr/ctxtP_SONUM").text = cod_ped
+        time.sleep(2)
         session.findById("/app/con[0]/ses[0]/wnd[0]/tbar[1]/btn[8]").press()
-        time.sleep(2) 
+        time.sleep(2)
         session.findById("/app/con[0]/ses[0]/wnd[0]/tbar[1]/btn[37]")
         print("Encontro correctamente btn rechzaso")
-        session.findById("/app/con[0]/ses[0]/wnd[0]/tbar[1]/btn[37]").press() 
+        session.findById("/app/con[0]/ses[0]/wnd[0]/tbar[1]/btn[37]").press()
         time.sleep(5)
         session.findById("/app/con[0]/ses[0]/wnd[0]/tbar[1]/btn[38]").press()
-        time.sleep(5) 
+        time.sleep(5)
         vpanelgrabado = session.findById("/app/con[0]/ses[0]/wnd[0]/sbar/pane[0]").text
         print(vpanelgrabado)
         session.findById("wnd[0]/tbar[0]/btn[3]").press()
         time.sleep(5)
         print("[ZSD007] Regresando al menu principal")
-        session.findById("/app/con[0]/ses[0]/wnd[0]/usr/ctxtP_SONUM").text = "20039216"
+        session.findById("/app/con[0]/ses[0]/wnd[0]/usr/ctxtP_SONUM").text = cod_ped
         time.sleep(2)
         session.findById("/app/con[0]/ses[0]/wnd[0]/tbar[1]/btn[8]").press()
         time.sleep(2)

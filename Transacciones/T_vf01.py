@@ -1,6 +1,6 @@
 import time
 
-def ejecutar_VF01(session):
+def ejecutar_VF01(session, fila: dict):
     try:
         print("[VF01] Navegando a transaccion...")
         session.findById("wnd[0]/tbar[0]/okcd").text = "/nVF01"

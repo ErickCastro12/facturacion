@@ -1,6 +1,6 @@
 import time
 
-def ejecutar_ZEDOCPE001(session):
+def ejecutar_ZEDOCPE001(session, fila: dict):
     try:
         print("[ZEDOCPE001] Navegando a transaccion...")
         session.findById("wnd[0]/tbar[0]/okcd").text = "/nZEDOCPE001"

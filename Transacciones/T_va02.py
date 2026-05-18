@@ -42,14 +42,15 @@ def asignar_fila(session, fila, key_opcion, valor_partner):
         return False
 
 
-def ejecutar_VA02(session):
+def ejecutar_VA02(session, fila: dict):
+    cod_ped = str(int(float(fila["COD PED"])))
     try:
-        print("[VA02] Navegando a transaccion...")
+        print(f"[VA02] Navegando a transaccion | Pedido: {cod_ped}")
         session.findById("wnd[0]/tbar[0]/okcd").text = "/nVA02"
         session.findById("wnd[0]").sendVKey(0)
         time.sleep(2)
 
-        session.findById("/app/con[0]/ses[0]/wnd[0]/usr/ctxtVBAK-VBELN").text = "20039216"
+        session.findById("/app/con[0]/ses[0]/wnd[0]/usr/ctxtVBAK-VBELN").text = cod_ped
         time.sleep(2)
         session.findById("/app/con[0]/ses[0]/wnd[0]/usr/btnBT_SUCH").press()
         time.sleep(1)
