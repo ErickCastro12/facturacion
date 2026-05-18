@@ -50,7 +50,21 @@ def iniciar_sap(ruta_sap, ambiente):
 def login_sap(session, user, password):
 
     try:
-        session.findById("wnd[0]/usr/txtRSYST-BNAME").text = user
+        # Esperar a que la pantalla de login cargue completamente
+        time.sleep(3)
+
+        # Reintentar hasta 5 veces por si la pantalla tarda en renderizar
+        for intento in range(1, 6):
+            try:
+                session.findById("wnd[0]/usr/txtRSYST-BNAME").text = user
+                break
+            except Exception:
+                print(f"Pantalla de login no lista, esperando... intento {intento}/5")
+                time.sleep(2)
+        else:
+            print("Timeout esperando pantalla de login SAP.")
+            return None
+
         session.findById("wnd[0]/usr/pwdRSYST-BCODE").text = password
         session.findById("wnd[0]/usr/txtRSYST-LANGU").text = "ES"
 

@@ -5,3 +5,4 @@ loguru>=0.7.0
 reportlab>=4.0.0
 pywin32>=306
 psutil>=5.9.0
+xlwings>=0.30.0

@@ -10,7 +10,8 @@ en la columna ESTADO del Excel al finalizar.
 import sys
 import time
 import importlib.util
-import openpyxl
+import ctypes
+import xlwings as xw
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -54,6 +55,10 @@ PIPELINE = [
     ("ZEDOCPE001", "T_ZEDOCPE001", "ejecutar_ZEDOCPE001"),
 ]
 
+# Pausa interactiva después de este paso (None = sin pausa)
+# Cambia a "VA02" para probar hasta VA02 y pausar antes de continuar
+PAUSAR_DESPUES_DE = "VA02"
+
 COL_ESTADO  = "ESTADO"
 COL_COD_PED = "COD PED"
 
@@ -71,26 +76,56 @@ def _cargar_transaccion(archivo: str, funcion: str):
     return getattr(modulo, funcion)
 
 
+def _msgbox_continuar(paso: str, cod_ped: str) -> bool:
+    """
+    Muestra un MessageBox de Windows.
+    Retorna True si el usuario hace click en Aceptar (continuar).
+    Retorna False si hace click en Cancelar (detener esta fila).
+    """
+    MB_OKCANCEL    = 0x01
+    MB_ICONQUESTION = 0x20
+    IDOK = 1
+
+    mensaje = (
+        f"Paso '{paso}' completado para pedido {cod_ped}.\n\n"
+        f"Haz clic en Aceptar para continuar con los siguientes pasos,\n"
+        f"o Cancelar para detener esta fila."
+    )
+    resultado = ctypes.windll.user32.MessageBoxW(0, mensaje, "RPA - Pausa de verificación", MB_OKCANCEL | MB_ICONQUESTION)
+    return resultado == IDOK
+
+
+def _escribir_celda(ruta: str, numero_fila_excel: int, nombre_columna: str, valor) -> None:
+    """Escribe un valor en la columna indicada usando xlwings (preserva formato y fórmulas)."""
+    app = xw.App(visible=False)
+    try:
+        wb = app.books.open(ruta)
+        ws = wb.sheets["maestro"]
+
+        # Buscar índice de columna en fila de encabezado (fila 5)
+        col_idx = None
+        for col in range(1, 200):
+            celda = ws.cells(5, col).value
+            if celda is None:
+                break
+            if str(celda).strip() == nombre_columna:
+                col_idx = col
+                break
+
+        if col_idx is None:
+            logger.warning(f"Columna '{nombre_columna}' no encontrada en el Excel.")
+            wb.close()
+            return
+
+        ws.cells(numero_fila_excel, col_idx).value = valor
+        wb.save()
+        logger.debug(f"Excel actualizado → fila {numero_fila_excel} | {nombre_columna} = {valor}")
+    finally:
+        app.quit()
+
+
 def _escribir_estado(ruta: str, numero_fila_excel: int, valor: str) -> None:
-    """Escribe el valor en la columna ESTADO de la fila indicada en el Excel."""
-    wb = openpyxl.load_workbook(ruta)
-    ws = wb["maestro"]
-
-    col_idx = None
-    for col in range(1, ws.max_column + 1):
-        if str(ws.cell(5, col).value).strip() == COL_ESTADO:
-            col_idx = col
-            break
-
-    if col_idx is None:
-        logger.warning(f"Columna '{COL_ESTADO}' no encontrada en el Excel.")
-        wb.close()
-        return
-
-    ws.cell(numero_fila_excel, col_idx).value = valor
-    wb.save(ruta)
-    wb.close()
-    logger.debug(f"Excel actualizado → fila {numero_fila_excel} | {COL_ESTADO} = {valor}")
+    _escribir_celda(ruta, numero_fila_excel, COL_ESTADO, valor)
 
 
 # ---------------------------------------------------------------------------
@@ -125,8 +160,24 @@ def ejecutar_pipeline(session, fila: dict, numero_fila_excel: int) -> bool:
                 _log_resumen_fila(cod_ped, pasos_ok, pasos_fail)
                 return False
 
+            # Si la transaccion retorna un dict, escribir cada campo en el Excel
+            if isinstance(resultado, dict):
+                for col_nombre, col_valor in resultado.items():
+                    _escribir_celda(RUTA_CUADRO_MAESTRO, numero_fila_excel, col_nombre, col_valor)
+
             logger.success(f"[PASO] {nombre} completado en {duracion}s.")
             pasos_ok.append(nombre)
+
+            # Pausa interactiva si este paso coincide con PAUSAR_DESPUES_DE
+            if PAUSAR_DESPUES_DE and nombre == PAUSAR_DESPUES_DE:
+                logger.info(f"[PAUSA] Esperando confirmación del usuario tras {nombre}...")
+                continuar = _msgbox_continuar(nombre, cod_ped)
+                if not continuar:
+                    logger.warning(f"[PAUSA] Usuario canceló. Deteniendo fila {numero_fila_excel}.")
+                    _escribir_estado(RUTA_CUADRO_MAESTRO, numero_fila_excel, f"PAUSADO_{nombre}")
+                    _log_resumen_fila(cod_ped, pasos_ok, pasos_fail)
+                    return False
+                logger.info("[PAUSA] Usuario confirmó. Continuando pipeline...")
 
         except Exception as e:
             duracion = round(time.time() - inicio, 1)

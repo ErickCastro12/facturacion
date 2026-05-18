@@ -1,5 +1,8 @@
-# Transacciones/T-va02.py
 import time
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from helpers.cuadro_maestro import obtener_cod_interlocutor
 
 BASE_PATH    = r"/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD/tabpT\07/ssubSUBSCREEN_BODY:SAPMV45A:4352/subSUBSCREEN_PARTNER_OVERVIEW:SAPLV09C:1000/tblSAPLV09CGV_TC_PARTNER_OVERVIEW/cmbGVS_TC_DATA-REC-PARVW[0,{}]"
 PARTNER_PATH = r"/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD/tabpT\07/ssubSUBSCREEN_BODY:SAPMV45A:4352/subSUBSCREEN_PARTNER_OVERVIEW:SAPLV09C:1000/tblSAPLV09CGV_TC_PARTNER_OVERVIEW/ctxtGVS_TC_DATA-REC-PARTNER[1,{}]"
@@ -72,13 +75,20 @@ def ejecutar_VA02(session, fila: dict):
         session.findById(r"/app/con[0]/ses[0]/wnd[0]/usr/tabsTAXI_TABSTRIP_HEAD/tabpT\07").select()
         time.sleep(2)
 
-        fila = encontrar_primera_fila_vacia(session)
-        if fila is None:
+        opr_logist = str(fila.get("OPR LOGIST", "")).strip()
+        cod_interlocutor = obtener_cod_interlocutor(opr_logist)
+        print(f"[VA02] Operador logístico: {opr_logist} → COD interlocutor: {cod_interlocutor}")
+
+        fila_sap = encontrar_primera_fila_vacia(session)
+        if fila_sap is None:
             print("[VA02] No hay filas disponibles")
             return False
 
-        # Usa la misma fila para el combo y el campo de texto
-        return asignar_fila(session, fila, "ZO", "10445")
+        ok = asignar_fila(session, fila_sap, "ZO", cod_interlocutor)
+        if not ok:
+            return False
+
+        return {"Monto total CFR": valorneto}
 
     except Exception as e:
         print(f"[VA02] Error: {e}")

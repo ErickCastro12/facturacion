@@ -266,6 +266,25 @@ def resumen_estado(ruta: str = RUTA_CUADRO_MAESTRO) -> pd.Series:
     return df["STATUS"].value_counts(dropna=False)
 
 
+def obtener_cod_interlocutor(opr_logist: str, ruta: str = RUTA_CUADRO_MAESTRO) -> str:
+    """
+    Busca el código interlocutor SAP según el operador logístico.
+    Lee hoja FACT columna P (PROVEEDOR) y retorna columna Q (COD).
+    """
+    df = pd.read_excel(ruta, sheet_name="FACT", header=None, usecols=[15, 16])
+    df.columns = ["PROVEEDOR", "COD"]
+    df = df.dropna(subset=["PROVEEDOR", "COD"])
+    df["PROVEEDOR"] = df["PROVEEDOR"].astype(str).str.strip().str.upper()
+
+    clave = str(opr_logist).strip().upper()
+    fila = df[df["PROVEEDOR"] == clave]
+
+    if fila.empty:
+        raise ValueError(f"Operador logístico '{opr_logist}' no encontrado en tabla FACT.")
+
+    return str(int(fila["COD"].iloc[0]))
+
+
 # ---------------------------------------------------------------------------
 # USO DIRECTO (debug)
 # ---------------------------------------------------------------------------
